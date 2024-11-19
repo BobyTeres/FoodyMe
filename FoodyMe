@@ -1,0 +1,145 @@
+bash
+npm install express mongoose passport.js body-parser stripe
+
+
+Server.js
+
+
+const express = require('express');
+const app = express();
+const mongoose = require('mongoose');
+const passport = require('passport');
+const bodyParser = require('body-parser');
+const stripe = require('stripe')('YOUR_STRIPE_SECRET_KEY');
+
+mongoose.connect('mongodb://localhost/foodfusion', { useNewUrlParser: true, useUnifiedTopology: true });
+
+app.use(bodyParser.json());
+app.use(passport.initialize());
+
+const cookSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String,
+  menu: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Meal' }]
+});
+
+const mealSchema = new mongoose.Schema({
+  name: String,
+  description: String,
+  price: Number,
+  cook: { type: mongoose.Schema.Types.ObjectId, ref: 'Cook' }
+});
+
+const orderSchema = new mongoose.Schema({
+  customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  meal: { type: mongoose.Schema.Types.ObjectId, ref: 'Meal' },
+  quantity: Number,
+  total: Number
+});
+
+const customerSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String,
+  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }]
+});
+
+const Cook = mongoose.model('Cook', cookSchema);
+const Meal = mongoose.model('Meal', mealSchema);
+const Order = mongoose.model('Order', orderSchema);
+const Customer = mongoose.model('Customer', customerSchema);
+
+app.post('/register/cook', async (req, res) => {
+  const { name, email, password } = req.body;
+  const cook = new Cook({ name, email, password });
+  await cook.save();
+  res.json({ message: 'Cook registered successfully' });
+});
+
+app.post('/register/customer', async (req, res) => {
+  const { name, email, password } = req.body;
+  const customer = new Customer({ name, email, password });
+  await customer.save();
+  res.json({ message: 'Customer registered successfully' });
+});
+
+app.post('/meal', async (req, res) => {
+  const { name, description, price, cookId } = req.body;
+  const meal = new Meal({ name, description, price, cook: cookId });
+  await meal.save();
+  res.json({ message: 'Meal posted successfully' });
+});
+
+app.post('/order', async (req, res) => {
+  const { customerId, mealId, quantity } = req.body;
+  const meal = await Meal.findById(mealId);
+  const total = meal.price * quantity;
+  const order = new Order({ customer: customerId, meal: mealId, quantity, total });
+  await order.save();
+  res.json({ message: 'Order placed successfully' });
+});
+
+app.get('/meals', async (req, res) => {
+  const meals = await Meal.find().populate('cook');
+  res.json(meals);
+});
+
+app.get('/orders', async (req, res) => {
+  const orders = await Order.find().populate('customer').populate('meal');
+  res.json(orders);
+});
+
+app.listen(3000, () => {
+  console.log('Server started on port 3000');
+});
+
+
+Frontend (React Native)
+
+Install dependencies
+
+
+bash
+npm install react-native react-navigation react-native-elements
+
+
+App.js
+
+
+jsx
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Button } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+
+const Stack = createStackNavigator();
+
+const RegisterCookScreen = ({ navigation }) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const registerCook = async () => {
+    const response = await fetch('http://localhost:3000/register/cook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    });
+    const json = await response.json();
+    console.log(json);
+    navigation.navigate('Login');
+  };
+
+  return (
+    <View>
+      <Text>Register as Cook</Text>
+      <TextInput placeholder="Name" value={name} onChangeText={setName} />
+      <TextInput placeholder="Email" value={email} onChangeText={setEmail} />
+      <TextInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      <Button title="Register" onPress={registerCook} />
+    </View>
+  );
+};
+
+const RegisterCustomerScreen = ({ navigation
